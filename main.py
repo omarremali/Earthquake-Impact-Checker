@@ -2,12 +2,11 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 from geopy.distance import geodesic
-import math
 
 app = FastAPI(
     title="Earthquake Impact Checker",
     description="Will this earthquake affect me?",
-    version="1.3"
+    version="1.4"
 )
 
 # -----------------------------
@@ -23,24 +22,31 @@ app.add_middleware(
 
 USGS_LATEST = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
 
-
 # -----------------------------
-# Scoring logic
+# Scoring logic (updated for realistic results)
 # -----------------------------
 def impact_score(magnitude, distance_km, building_type):
     building_factor = {
-        "house": 1.0,
-        "apartment": 1.5,
-        "old_building": 2.0
-    }.get(building_type, 1.0)
+        "house": 0,
+        "apartment": 1,
+        "old_building": 2
+    }.get(building_type, 0)
 
-    score = (
-        (magnitude * 1.2)
-        - (math.log10(distance_km + 1) * 3)
-        + building_factor
-    )
+    # distance effect
+    if distance_km < 10:
+        distance_factor = 10
+    elif distance_km < 50:
+        distance_factor = 7
+    elif distance_km < 100:
+        distance_factor = 5
+    elif distance_km < 200:
+        distance_factor = 3
+    else:
+        distance_factor = 0
 
-    return max(0, round(score, 1))
+    # realistic magnitude effect
+    score = magnitude * 4 + building_factor + distance_factor
+    return round(score, 1)
 
 
 def impact_level(score):
@@ -64,9 +70,10 @@ def felt_intensity(score):
 def confidence_statement(score):
     if score < 10:
         return "You are very unlikely to notice any earthquake activity."
-    if score < 30:
+    elif score < 30:
         return "Some people may feel light shaking."
-    return "There is a realistic chance of noticeable shaking."
+    else:
+        return "There is a realistic chance of noticeable shaking."
 
 
 # -----------------------------
@@ -78,8 +85,11 @@ def check_impact(
     lon: float = Query(..., description="Your longitude"),
     building: str = Query("house", description="house | apartment | old_building")
 ):
-    response = requests.get(USGS_LATEST, timeout=10)
-    data = response.json()
+    try:
+        response = requests.get(USGS_LATEST, timeout=10)
+        data = response.json()
+    except:
+        return {"error": "Cannot fetch earthquake data."}
 
     if not data.get("features"):
         return {"error": "No earthquake data available"}
