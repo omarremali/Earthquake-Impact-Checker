@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Earthquake Impact Checker</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f6f8; padding: 20px; color: #333; }
+    h1 { text-align: center; color: #2c3e50; }
+    .card { background: #fff; padding: 20px; margin: 20px auto; max-width: 500px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    label { display: block; margin-top: 10px; font-weight: bold; }
+    input { width: 100%; padding: 10px; margin-top: 5px; border-radius: 5px; border: 1px solid #ccc; }
+    button { margin-top: 15px; padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+    button:hover { background: #2980b9; }
+    .result { margin-top: 20px; padding: 15px; border-radius: 8px; background: #ecf0f1; }
+    .result p { margin: 5px 0; }
+    .highlight { font-weight: bold; color: #e74c3c; }
+    .low { color: #27ae60; }
+    .medium { color: #f39c12; }
+    .high { color: #e74c3c; }
+  </style>
+</head>
+<body>
+
+  <h1>Earthquake Impact Checker</h1>
+
+  <div class="card">
+    <label for="lat">Latitude:</label>
+    <input type="number" id="lat" placeholder="e.g. 50.0755" step="any">
+
+    <label for="lon">Longitude:</label>
+    <input type="number" id="lon" placeholder="e.g. 14.4378" step="any">
+
+    <label for="building">Building type:</label>
+    <select id="building">
+      <option value="house">House</option>
+      <option value="apartment">Apartment</option>
+      <option value="old_building">Old Building</option>
+    </select>
+
+    <button id="checkBtn">Check Impact</button>
+
+    <div class="result" id="result" style="display:none;"></div>
+  </div>
+
+  <script>
+    const btn = document.getElementById('checkBtn');
+    const resultDiv = document.getElementById('result');
+
+    btn.addEventListener('click', async () => {
+      const lat = parseFloat(document.getElementById('lat').value);
+      const lon = parseFloat(document.getElementById('lon').value);
+      const building = document.getElementById('building').value;
+
+      if (isNaN(lat) || isNaN(lon)) {
+        alert('Please enter valid latitude and longitude.');
+        return;
+      }
+
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = 'Checking...';
+
+      try {
+        const response = await fetch(`http://127.0.0.1:8000/impact?lat=${lat}&lon=${lon}&building=${building}`);
+        const data = await response.json();
+
+        if (data.status) {
+          // No nearby quake
+          resultDiv.innerHTML = `
+            <p class="highlight">${data.status}</p>
+            <p>Impact Level: <span class="low">${data.impact_level}</span></p>
+            <p>Confidence: ${data.confidence}</p>
+            <p>Why: ${data.why}</p>
+            <p>What to do:</p>
+            <ul>${data.what_to_do.map(item => `<li>${item}</li>`).join('')}</ul>
+          `;
+        } else {
+          // Nearby quake
+          const levelClass = data.impact_level.toLowerCase();
+          resultDiv.innerHTML = `
+            <p><span class="highlight">Earthquake:</span> ${data.earthquake.place} (${data.earthquake.magnitude}M, ${data.earthquake.depth_km} km deep)</p>
+            <p><span class="highlight">Distance:</span> ${data.distance_km} km</p>
+            <p>Impact Score: ${data.impact_score}</p>
+            <p>Impact Level: <span class="${levelClass}">${data.impact_level}</span></p>
+            <p>Felt Intensity: ${data.felt_intensity}</p>
+            <p>Confidence: ${data.confidence}</p>
+            <p>Why: ${data.why}</p>
+            <p>What to do:</p>
+            <ul>${data.what_to_do.map(item => `<li>${item}</li>`).join('')}</ul>
+          `;
+        }
+      } catch (err) {
+        resultDiv.innerHTML = `<p style="color:red;">Error fetching data. Make sure the backend is running.</p>`;
+        console.error(err);
+      }
+    });
+
+    // Optional: Use GPS to prefill location
+    window.addEventListener('load', () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+          document.getElementById('lat').value = pos.coords.latitude.toFixed(5);
+          document.getElementById('lon').value = pos.coords.longitude.toFixed(5);
+        });
+      }
+    });
+  </script>
+
+</body>
+</html>
