@@ -6,8 +6,8 @@ import math
 
 app = FastAPI(
     title="Earthquake Impact Checker",
-    description="Realistic earthquake impact with fallback test quake",
-    version="3.0"
+    description="Realistic earthquake impact using real USGS data only",
+    version="4.0"
 )
 
 # Allow CORS
@@ -94,23 +94,31 @@ def check_impact(
         q_lon, q_lat, depth = q["geometry"]["coordinates"]
         dist = geodesic((lat, lon), (q_lat, q_lon)).km
 
-        if dist < 1000:
+        if dist < 1000:  # consider earthquakes within 1000 km
             nearby_quakes.append((q, dist))
 
     # -----------------------------
-    # CASE 1: No real nearby quakes → inject test quake
+    # CASE 1: No nearby quakes
     # -----------------------------
     if not nearby_quakes:
-        # Simulate a test quake near user location
-        test_quake = {
-            "properties": {"mag": 6.5, "place": "Test Epicenter"},
-            "geometry": {"coordinates": [lon + 0.1, lat + 0.1, 10]}
+        return {
+            "status": "No relevant earthquakes near your location",
+            "impact_level": "Low",
+            "impact_score": 0,
+            "felt_intensity": "None",
+            "confidence": "No earthquake activity near you is expected to be felt.",
+            "why": "No earthquakes of magnitude 3.0+ occurred within 1000 km in the last 24 hours.",
+            "what_to_do": [
+                "No action needed",
+                "Stay informed for future alerts",
+                "Ensure general emergency preparedness"
+            ]
         }
-        quake = test_quake
-        distance_km = geodesic((lat, lon), (lat + 0.1, lon + 0.1)).km
-    else:
-        # Closest real quake
-        quake, distance_km = min(nearby_quakes, key=lambda x: x[1])
+
+    # -----------------------------
+    # CASE 2: Closest real quake
+    # -----------------------------
+    quake, distance_km = min(nearby_quakes, key=lambda x: x[1])
 
     q_lon, q_lat, depth = quake["geometry"]["coordinates"]
     magnitude = quake["properties"]["mag"]
@@ -133,7 +141,7 @@ def check_impact(
         "impact_level": impact_level(score),
         "felt_intensity": felt_intensity(score),
         "confidence": confidence_statement(score),
-        "why": "This is the closest significant earthquake to your location (real or test).",
+        "why": "This is the closest significant earthquake to your location.",
         "what_to_do": [
             "Stay calm and informed",
             "Secure loose objects nearby",
