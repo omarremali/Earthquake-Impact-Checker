@@ -2,19 +2,20 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 from geopy.distance import geodesic
+import math
 
 app = FastAPI(
     title="Earthquake Impact Checker",
     description="Will this earthquake affect me?",
-    version="1.4"
+    version="2.0"
 )
 
 # -----------------------------
-# Allow CORS for all origins (so browser can call from file or another host)
+# Allow CORS for browser access
 # -----------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # <- allow any origin
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -23,7 +24,7 @@ app.add_middleware(
 USGS_LATEST = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
 
 # -----------------------------
-# Scoring logic (updated for realistic results)
+# Scoring logic (realistic)
 # -----------------------------
 def impact_score(magnitude, distance_km, building_type):
     building_factor = {
@@ -32,37 +33,28 @@ def impact_score(magnitude, distance_km, building_type):
         "old_building": 2
     }.get(building_type, 0)
 
-    # distance effect
-    if distance_km < 10:
-        distance_factor = 10
-    elif distance_km < 50:
-        distance_factor = 7
-    elif distance_km < 100:
-        distance_factor = 5
-    elif distance_km < 200:
-        distance_factor = 3
-    else:
-        distance_factor = 0
+    # Distance decay (logarithmic)
+    distance_factor = max(0, 10 - math.log10(distance_km + 1) * 5)
 
-    # realistic magnitude effect
-    score = magnitude * 4 + building_factor + distance_factor
+    # Magnitude weight
+    score = magnitude * 10 + distance_factor + building_factor
     return round(score, 1)
 
 
 def impact_level(score):
-    if score < 20:
+    if score < 30:
         return "Low"
-    elif score < 45:
+    elif score < 60:
         return "Medium"
     else:
         return "High"
 
 
 def felt_intensity(score):
-    if score < 20:
+    if score < 30:
         return "Barely felt"
-    elif score < 45:
-        return "Strong shaking possible"
+    elif score < 60:
+        return "Noticeable shaking"
     else:
         return "Potential damage"
 
@@ -70,8 +62,8 @@ def felt_intensity(score):
 def confidence_statement(score):
     if score < 10:
         return "You are very unlikely to notice any earthquake activity."
-    elif score < 30:
-        return "Some people may feel light shaking."
+    elif score < 50:
+        return "Some people may feel shaking."
     else:
         return "There is a realistic chance of noticeable shaking."
 
